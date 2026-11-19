@@ -72,22 +72,25 @@
 
   // download it now, so the tap can open the share sheet straight away (“Save Video” puts it in Photos)
   let file = null;
+  // Android has no “Save Video” in its share sheet, but a plain download lands in the Gallery / Google Photos
+  const android = /Android/i.test(navigator.userAgent);
   const name = 'photo-strip.' + (isVideo ? 'mp4' : 'jpg'), type = isVideo ? 'video/mp4' : 'image/jpeg';
   fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); }).then(b => {
     file = new File([b], name, { type });
-    const canShare = navigator.canShare && navigator.canShare({ files: [file] });
+    const canShare = !android && navigator.canShare && navigator.canShare({ files: [file] });
     $('save').disabled = false;
-    $('save').textContent = canShare ? 'save to photos' : 'download';
-    if (!canShare) $('step2').textContent = 'Open the download and save it';
+    $('save').textContent = canShare || android ? 'save to photos' : 'download';
+    if (android) $('step2').textContent = 'It saves to your gallery';
+    else if (!canShare) $('step2').textContent = 'Open the download and save it';
   }).catch(() => {
     // couldn't fetch it (old browser or blocked): fall back to a plain download link
     const a = document.createElement('a'); a.className = 'btn'; a.href = dlURL; a.textContent = 'download'; a.setAttribute('download', name);
     $('save').replaceWith(a);
-    $('step2').textContent = 'Open the download, tap share, then “Save Video”';
+    $('step2').textContent = android ? 'Open the download — it’s in your gallery' : 'Open the download, tap share, then “Save Video”';
   });
   $('save').addEventListener('click', async () => {
     if (!file) return;
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (!android && navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file] }); } catch (e) {}
     } else {
       const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove();
