@@ -50,7 +50,7 @@
   <div class="card">
     <ol id="steps">
       <li><b>01</b><span id="step1">Tap the button above</span></li>
-      <li><b>02</b><span id="step2">Choose “Save Video”</span></li>
+      <li><b>02</b><span id="step2">Choose “Save Image”</span></li>
       <li><b>03</b><span id="step3">Find it in your photos ♡</span></li>
     </ol>
   </div>
@@ -65,21 +65,24 @@
   const android = /Android/i.test(navigator.userAgent);   // Android: a plain download lands in the Gallery / Google Photos
   if (!id) { $('btns').innerHTML = '<button class="btn" disabled>link is missing its photo</button>'; return; }
 
+  // the live strip is stored as a video; Cloudinary hands it out as an animated GIF (the mp4 is the backup)
   const items = kinds.map(k => {
-    const base = `https://res.cloudinary.com/${cloud}/${k}/upload`, ext = k === 'video' ? 'mp4' : 'jpg';
-    return { k, url: `${base}/${id}.${ext}`, dl: `${base}/fl_attachment/${id}.${ext}`, name: `photo-strip.${ext}`,
-             type: k === 'video' ? 'video/mp4' : 'image/jpeg', label: k === 'video' ? 'save video' : 'save photo', file: null };
+    const base = `https://res.cloudinary.com/${cloud}/${k}/upload`;
+    if (k === 'video') return { k, url: `${base}/w_360,fps_15/${id}.gif`, dl: `${base}/w_360,fps_15,fl_attachment/${id}.gif`, name: 'photo-strip-live.gif',
+             type: 'image/gif', backup: { url: `${base}/${id}.mp4`, name: 'photo-strip-live.mp4', type: 'video/mp4' }, file: null };
+    return { k, url: `${base}/${id}.jpg`, dl: `${base}/fl_attachment/${id}.jpg`, name: 'photo-strip.jpg', type: 'image/jpeg', file: null };
   });
 
   // preview: the live video (looping) and the photo strip, side by side
   const pair = $('pair'); pair.classList.toggle('two', items.length > 1);
   items.forEach(it => {
     const fig = document.createElement('figure'), box = document.createElement('div'); box.className = 'media';
-    if (it.k === 'video') {
+    const im = document.createElement('img'); im.src = it.url; im.alt = it.k === 'video' ? 'your live strip' : 'your photo strip'; box.appendChild(im);
+    if (it.backup) im.onerror = () => {   // GIF not available: play the video instead
       const v = document.createElement('video');
-      Object.assign(v, { src: it.url, muted: true, loop: true, autoplay: true, playsInline: true });
-      v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); box.appendChild(v); v.play().catch(() => {});
-    } else { const im = document.createElement('img'); im.src = it.url; im.alt = 'your photo strip'; box.appendChild(im); }
+      Object.assign(v, { src: it.backup.url, muted: true, loop: true, autoplay: true, playsInline: true });
+      v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); im.replaceWith(v); v.play().catch(() => {});
+    };
     fig.appendChild(box);
     if (items.length > 1) { const cap = document.createElement('figcaption'); cap.textContent = it.k === 'video' ? 'live' : 'photo'; fig.appendChild(cap); }
     pair.appendChild(fig);
@@ -89,20 +92,21 @@
   const both = items.length > 1, onlyImg = items[0].k === 'image';
   $('step1').textContent = 'Tap “save to photos”';
   $('step2').textContent = android ? (both ? 'Both save to your gallery' : 'It saves to your gallery')
-    : both ? 'Choose “Save 2 Items”' : onlyImg ? 'Choose “Save Image”' : 'Choose “Save Video”';
+    : both ? 'Choose “Save 2 Images”' : 'Choose “Save Image”';
 
   if (both) $('step3').textContent = 'Find them in your photos ♡';
   // one button saves every version at once; the files are downloaded ahead so the tap opens the share sheet straight away
   const b = document.createElement('button'); b.className = 'btn'; b.disabled = true; b.textContent = 'getting your strip…';
   $('btns').appendChild(b);
-  Promise.all(items.map(it => fetch(it.url).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
-    .then(bl => { it.file = new File([bl], it.name, { type: it.type }); }).catch(() => {}))).then(() => {
+  const get = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); });
+  Promise.all(items.map(it => get(it.url).then(bl => { it.file = new File([bl], it.name, { type: it.type }); })
+    .catch(() => it.backup ? get(it.backup.url).then(bl => { it.file = new File([bl], it.backup.name, { type: it.backup.type }); }) : null).catch(() => {}))).then(() => {
     const ready = items.filter(it => it.file);
     if (!ready.length) {
       // couldn't fetch them (old browser or blocked): plain download links instead
       b.remove();
       items.forEach((it, n) => { const a = document.createElement('a'); a.className = 'btn' + (n ? ' alt' : ''); a.href = it.dl; a.setAttribute('download', it.name);
-        a.textContent = it.k === 'video' ? 'download video' : 'download photo'; $('btns').appendChild(a); });
+        a.textContent = it.k === 'video' ? 'download live GIF' : 'download photo'; $('btns').appendChild(a); });
       $('step2').textContent = android ? 'Open the download — it’s in your gallery' : 'Open the download, tap share, then save it';
       return;
     }
