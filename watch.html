@@ -31,10 +31,11 @@
   li b{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:11px;font-weight:600;color:#fff}
   li:nth-child(1) b{background:var(--mag)} li:nth-child(2) b{background:var(--cyan)} li:nth-child(3) b{background:var(--yel);color:#000}
   .note{font-size:13px;color:#777;text-align:center;max-width:300px;line-height:1.4}
-  .tabs{display:flex;border:2px solid #000}
-  .tabs[hidden]{display:none}
-  .tab{font:inherit;font-size:15px;font-weight:600;background:#fff;color:#000;border:0;padding:8px 22px;cursor:pointer}
-  .tab.on{background:#000;color:#fff}
+  /* live + photo side by side */
+  .pair{display:flex;gap:18px;justify-content:center;align-items:flex-start}
+  figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:10px}
+  figcaption{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#444}
+  .pair.two .media{height:min(44dvh,520px)}
   .btns{display:flex;flex-direction:column;gap:10px;align-items:center}
   .btn.alt{background:#fff;color:#000;border:2px solid #000}
   .btn.alt:disabled{color:#8c8c8c;border-color:#8c8c8c;background:#fff}
@@ -44,8 +45,7 @@
 <body>
   <div class="bar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   <h1>Your photo strip</h1>
-  <div class="tabs" id="tabs" hidden><button class="tab on" data-k="video">live</button><button class="tab" data-k="image">photo</button></div>
-  <div class="media" id="media"></div>
+  <div class="pair" id="pair"></div>
   <div class="btns" id="btns"></div>
   <div class="card">
     <ol id="steps">
@@ -71,19 +71,19 @@
              type: k === 'video' ? 'video/mp4' : 'image/jpeg', label: k === 'video' ? 'save video' : 'save photo', file: null };
   });
 
-  // preview (live video loops; with both, the tabs switch between them)
-  const media = $('media');
-  function show(k){
-    const it = items.find(i => i.k === k); media.innerHTML = '';
-    if (k === 'video') {
+  // preview: the live video (looping) and the photo strip, side by side
+  const pair = $('pair'); pair.classList.toggle('two', items.length > 1);
+  items.forEach(it => {
+    const fig = document.createElement('figure'), box = document.createElement('div'); box.className = 'media';
+    if (it.k === 'video') {
       const v = document.createElement('video');
       Object.assign(v, { src: it.url, muted: true, loop: true, autoplay: true, playsInline: true });
-      v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); media.appendChild(v); v.play().catch(() => {});
-    } else { const im = document.createElement('img'); im.src = it.url; im.alt = 'your photo strip'; media.appendChild(im); }
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.k === k));
-  }
-  if (items.length > 1) { $('tabs').hidden = false; document.querySelectorAll('.tab').forEach(t => t.onclick = () => show(t.dataset.k)); }
-  show(items[0].k);
+      v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); box.appendChild(v); v.play().catch(() => {});
+    } else { const im = document.createElement('img'); im.src = it.url; im.alt = 'your photo strip'; box.appendChild(im); }
+    fig.appendChild(box);
+    if (items.length > 1) { const cap = document.createElement('figcaption'); cap.textContent = it.k === 'video' ? 'live' : 'photo'; fig.appendChild(cap); }
+    pair.appendChild(fig);
+  });
 
   // steps
   const both = items.length > 1, onlyImg = items[0].k === 'image';
